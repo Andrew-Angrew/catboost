@@ -9,6 +9,7 @@
 #include <util/generic/vector.h>
 #include <util/generic/yexception.h>
 #include <util/generic/ymath.h>
+#include <util/generic/serialized_enum.h>
 
 using NSplitSelection::IBinarizer;
 
@@ -116,15 +117,6 @@ THashSet<float> BestSplit(TVector<float>& features,
 
     const auto binarizer = NSplitSelection::MakeBinarizer(type);
     return binarizer->BestSplit(features, maxBordersCount, true);
-}
-
-THashSet<float> BestWeightedSplit(const TVector<float>& featureValues,
-                                    const TVector<float>& weights,
-                                    int maxBordersCount,
-                                    bool filterNans,
-                                    bool featuresAreSorted) {
-    return  TMedianInBinBinarizer().BestSplit<float>(featureValues, weights,
-                                                        maxBordersCount, filterNans, featuresAreSorted);
 }
 
 namespace {
@@ -1025,6 +1017,90 @@ THashSet<float> TMedianInBinBinarizer::BestSplit(TVector<float>& featureValues,
         featureValues.cend(), EPenaltyType::MaxSumLog);
     return GreedySplit<float>(initialBin, maxBordersCount);
 }
+
+template <typename TValueWeight>
+static inline bool ShouldBeSkiped(float value, TValueWeight weight, bool filterNans) {
+    if (weight <= 0) {
+        return true;
+    }
+    if (std::isnan(value)) {
+        Y_ENSURE(filterNans, "Nan value occured");
+        return true;
+    }
+    return false;
+}
+
+template <typename TWeight>
+std::pair<TVector<float>, TVector<TWeight>> GroupAndSortWeighedValues(
+        const TVector<float>& featureValues, const TVector<TWeight>& weights,
+        bool filterNans, bool isSorted) {
+    Y_ENSURE(featureValues.size() == weights.size());
+    TVector<float> uniqueFeatureValues;    // is it worth to make reserve?
+    TVector<TWeight> uniqueValueWeights;
+    if (isSorted) {
+        auto weightsIterator = weights.begin();
+        for (auto value : featureValues) {
+            auto weight = *weightsIterator++;
+            if (ShouldBeSkiped(value, weight, filterNans)) {
+                continue;
+            }
+            if (uniqueFeatureValues.empty() || uniqueFeatureValues.back() != value) {
+                uniqueFeatureValues.push_back(value);
+                uniqueValueWeights.push_back(weight);
+            } else {
+                uniqueValueWeights.back() += weight;
+            }
+        }
+    } else {
+        THashMap<float, TWeight> groupedValues;
+        auto weightsIterator = weights.begin();
+        for (auto value : featureValues) {
+            auto weight = *weightsIterator++;
+            if (ShouldBeSkiped(value, weight, filterNans)) {
+                continue;
+            }
+            if (groupedValues.contains(value)) {
+                groupedValues.at(value) += weight;
+            } else {
+                groupedValues.emplace(value, weight);
+                uniqueFeatureValues.push_back(value);
+            }
+        }
+        Sort(uniqueFeatureValues.begin(), uniqueFeatureValues.end());
+        // uniqueValueWeights.reserve(uniqueFeatureValues.size());
+        for (auto value : uniqueFeatureValues) {
+            uniqueValueWeights.push_back(groupedValues.at(value));
+        }
+    }
+    return {std::move(uniqueFeatureValues), std::move(uniqueValueWeights)};
+}
+
+template std::pair<TVector<float>, TVector<float>> GroupAndSortWeighedValues<float>(
+    const TVector<float>& featureValues, const TVector<float>& weights,
+    bool filterNans, bool isSorted);
+
+THashSet<float> BestWeightedSplit(const TVector<float>& featureValues,
+                                  const TVector<float>& weights,
+                                  int maxBordersCount,
+                                  EBorderSelectionType type,
+                                  bool filterNans,
+                                  bool featuresAreSorted) {
+    auto [uniqueFeatureValues, uniqueValueWeights] = GroupAndSortWeighedValues(featureValues, weights,
+                                                                               filterNans, featuresAreSorted);
+    switch (type) {
+        case EBorderSelectionType::MinEntropy:
+            return BestSplit(uniqueFeatureValues, uniqueValueWeights, maxBordersCount, EPenaltyType::MinEntropy);
+        case EBorderSelectionType::MaxLogSum:
+            return BestSplit(uniqueFeatureValues, uniqueValueWeights, maxBordersCount, EPenaltyType::MaxSumLog);
+        case EBorderSelectionType ::GreedyLogSum:
+            return TMedianInBinBinarizer().BestSplit<float>(featureValues, weights,
+                                                            maxBordersCount, filterNans, true); // fix!
+        default:
+            throw (yexception() << "Weights are ansupported for " <<
+                   GetEnumNames<EBorderSelectionType>().at(type) << " border selection type.");
+    }
+}
+
 
 template <typename TWeight>
 THashSet<float> TMedianInBinBinarizer::BestSplit(const TVector<float>& featureValues,

@@ -18,11 +18,18 @@ THashSet<float> BestSplit(
     bool nanValueIsInfty = false, // Sounds like there may be a border between usual values and nans. Better call it filterNans.
     bool featuresAreSorted = false);
 
+
+template <typename TWeight>
+std::pair<TVector<float>, TVector<TWeight>> GroupAndSortWeighedValues(
+    const TVector<float>& featureValues, const TVector<TWeight>& weights,
+    bool filterNans, bool isSorted);
+
 // TODO: support EBorderSelectionType
 THashSet<float> BestWeightedSplit(
     const TVector<float>& featureValues,
     const TVector<float>& weights,
     int maxBordersCount,
+    EBorderSelectionType type,
     bool filterNans = false,
     bool featuresAreSorted = false);
 

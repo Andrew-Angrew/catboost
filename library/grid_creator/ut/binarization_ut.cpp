@@ -13,8 +13,8 @@
 #include <random>
 #include <algorithm>
 
-static const TConstArrayRef<size_t> MAX_BORDER_COUNT_VALUES = {1, 10, 128};
-static const TConstArrayRef<bool> NAN_IS_INFINITY_VALUES = {true, false};
+static const TVector<size_t> MAX_BORDER_COUNT_VALUES = {1, 10, 128};
+static const TVector<bool> NAN_IS_INFINITY_VALUES = {true, false};
 static const TVector<EBorderSelectionType> BORDER_SELECTION_TYPES = (
     GetEnumAllValues<EBorderSelectionType>().Materialize());
 
@@ -58,6 +58,21 @@ THashSet<float> GetAllBorders(TVector<float> values) {
     return result;
 }
 
+Y_UNIT_TEST_SUITE(ValuePreprocessingTests) {
+    Y_UNIT_TEST(SmallCustomTest) {
+        const TVector<float> featureValues = {-1.0f, -1.0f, 0.0f, 1.1f, 1.1f, 1.1f};
+        const TVector<float> weights = {1, -1, 2, 1, 1, 1};
+        const std::pair<TVector<float>, TVector<float>> expectedResult = {
+            {-1.0f, 0.0f, 1.1f},
+            {1, 2, 3}
+        };
+        auto result = GroupAndSortWeighedValues(featureValues, weights, true, false);
+        UNIT_ASSERT_EQUAL(result, expectedResult);
+        result = GroupAndSortWeighedValues(featureValues, weights, true, true);
+        UNIT_ASSERT_EQUAL(result, expectedResult);
+    }
+}
+
 Y_UNIT_TEST_SUITE(BinarizationTests) {
     Y_UNIT_TEST(TestEmpty) {
         TVector<float> values;
@@ -84,30 +99,31 @@ Y_UNIT_TEST_SUITE(BinarizationTests) {
 }
 
 Y_UNIT_TEST_SUITE(WeightedBinarizationTests) {
+    auto type = EBorderSelectionType::GreedyLogSum;
     Y_UNIT_TEST(TestEmpty) {
         THashSet<float> expected_borders;
-        UNIT_ASSERT_EQUAL(expected_borders, BestWeightedSplit({}, {}, 1, false, true));
+        UNIT_ASSERT_EQUAL(expected_borders, BestWeightedSplit({}, {}, 1, type, false, true));
         UNIT_ASSERT_EQUAL(expected_borders,
-            BestWeightedSplit({1, 2, 3, 4}, {+0.0f, +0.0f, -0.0f, 1.0f}, 1, true, false));
+            BestWeightedSplit({1, 2, 3, 4}, {+0.0f, +0.0f, -0.0f, 1.0f}, 1, type, true, false));
         UNIT_ASSERT_EQUAL(expected_borders,
-                          BestWeightedSplit({1, 2, 3, 4}, {-1.0f, -1.0f, -1.0f, 1.0f}, 1, true, false));
+                          BestWeightedSplit({1, 2, 3, 4}, {-1.0f, -1.0f, -1.0f, 1.0f}, 1, type, true, false));
     }
 
     Y_UNIT_TEST(TestSmall) {
         TVector<float> featureValues = {1.0f, 2.0f};
         {
             TVector<float> weights = {1.0f, 1.0f};
-            auto borders = BestWeightedSplit(featureValues, weights, 1, true, true);
+            auto borders = BestWeightedSplit(featureValues, weights, 1, type, true, true);
             UNIT_ASSERT_EQUAL(borders, GetAllBorders(featureValues));
         }
         {
             TVector<float> weights = {10.0f, 0.1f};
-            auto borders = BestWeightedSplit(featureValues, weights, 1, true, true);
+            auto borders = BestWeightedSplit(featureValues, weights, 1, type, true, true);
             UNIT_ASSERT_EQUAL(borders, GetAllBorders(featureValues));
         }
         {
             TVector<float> weights = {10.0f, std::numeric_limits<float>::min()};
-            auto borders = BestWeightedSplit(featureValues, weights, 1, true, true);
+            auto borders = BestWeightedSplit(featureValues, weights, 1, type, true, true);
             UNIT_ASSERT_EQUAL(borders, GetAllBorders(featureValues));
         }
     }
@@ -118,17 +134,17 @@ Y_UNIT_TEST_SUITE(WeightedBinarizationTests) {
         for (auto borderCount : borderCounts) {
             {
                 TVector weights(6, 1.0f);
-                auto borders = BestWeightedSplit(values, weights, borderCount, true, true);
+                auto borders = BestWeightedSplit(values, weights, borderCount, type, true, true);
                 UNIT_ASSERT_EQUAL(borders, GetAllBorders(values));
             }
             {
                 auto borders = BestWeightedSplit(
-                    values, {1.0, 2.0, 4.0, 32.0, 16.0, 8.0}, borderCount, true, true);
+                    values, {1.0, 2.0, 4.0, 32.0, 16.0, 8.0}, borderCount, type, true, true);
                 UNIT_ASSERT_EQUAL(borders, GetAllBorders(values));
             }
             {
                 TVector weights(6, std::numeric_limits<float>::min());
-                auto borders = BestWeightedSplit(values, weights, borderCount, true, true);
+                auto borders = BestWeightedSplit(values, weights, borderCount, type, true, true);
                 UNIT_ASSERT_EQUAL(borders, GetAllBorders(values));
             }
         }
@@ -148,7 +164,7 @@ Y_UNIT_TEST_SUITE(WeightedBinarizationTests) {
                 auto values_copy = values;
                 const auto usual_borders = BestSplit(values_copy, bordersCount,
                                                      EBorderSelectionType::GreedyLogSum);
-                const auto weighthed_borders = BestWeightedSplit(values, weights, bordersCount);
+                const auto weighthed_borders = BestWeightedSplit(values, weights, bordersCount, type);
                 UNIT_ASSERT_EQUAL(usual_borders, weighthed_borders);
             }
         }
@@ -168,10 +184,10 @@ Y_UNIT_TEST_SUITE(WeightedBinarizationTests) {
             std::shuffle(weights.begin(), weights.end(), generator);
             for (size_t bordersCount : {3, 10, 50, 256}) {
                 UNIT_ASSERT_EQUAL(
-                    BestWeightedSplit(featureValues, weights, bordersCount, true, false).size(),
+                    BestWeightedSplit(featureValues, weights, bordersCount, type, true, false).size(),
                     Min(bordersCount, test_size - 1));
                 UNIT_ASSERT_EQUAL(
-                    BestWeightedSplit(featureValues, weights, bordersCount, true, true).size(),
+                    BestWeightedSplit(featureValues, weights, bordersCount, type, true, true).size(),
                     Min(bordersCount, test_size - 1));
             }
         }
