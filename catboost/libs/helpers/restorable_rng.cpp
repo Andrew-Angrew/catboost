@@ -8,3 +8,13 @@ TVector<ui64> GenRandUI64Vector(int size, ui64 randomSeed) {
     }
     return result;
 }
+
+TVector<double> GenRandUniformVector(int size, ui64 randomSeed) {
+    TFastRng64 rand(randomSeed);
+    TVector<double> result(size);
+    for (auto& value : result) {
+        value = rand.GenRandReal3();
+    }
+    return result;
+}
+

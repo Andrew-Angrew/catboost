@@ -3,6 +3,7 @@
 #include "enums.h"
 #include "option.h"
 #include "overfitting_detector_options.h"
+#include "dropout_options.h"
 #include "unimplemented_aware_option.h"
 
 #include <util/system/types.h>
@@ -33,6 +34,7 @@ namespace NCatboostOptions {
         TOption<bool> BoostFromAverage;
         TCpuOnlyOption<bool> ApproxOnFullHistory;
         TCpuOnlyOption<float> ModelShrinkRate;
+        TCpuOnlyOption<TTreeDropoutOptions> DropoutOptions;
 
 
         TGpuOnlyOption<ui32> MinFoldSize;

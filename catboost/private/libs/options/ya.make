@@ -31,6 +31,7 @@ SRCS(
     split_params.cpp
     system_options.cpp
     text_processing_options.cpp
+    dropout_options.cpp
 )
 
 PEERDIR(

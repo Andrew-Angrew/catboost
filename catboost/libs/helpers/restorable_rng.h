@@ -54,3 +54,7 @@ private:
 };
 
 TVector<ui64> GenRandUI64Vector(int size, ui64 randomSeed);
+
+// Generates a vector of random reals uniformly distributed in (0, 1)
+TVector<double> GenRandUniformVector(int size, ui64 randomSeed);
+

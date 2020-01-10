@@ -75,5 +75,6 @@ void CalcApproxForLeafStruct(
     const TSplitTree& tree,
     ui64 randomSeed,
     TLearnContext* ctx,
-    TVector<TVector<TVector<double>>>* approxesDelta // [bodyTailId][approxDim][docIdxInPermuted]
+    TVector<TVector<TVector<double>>>* approxesDelta, // [bodyTailId][approxDim][docIdxInPermuted]
+    TVector<TVector<TVector<double>>>* allFoldLeafDeltas // [bodyTailId][approxDim][leafIndex]
 );

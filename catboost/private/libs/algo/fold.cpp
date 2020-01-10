@@ -102,6 +102,7 @@ TFold TFold::BuildDynamicFold(
     double multiplier,
     bool storeExpApproxes,
     bool hasPairwiseWeights,
+    bool isDropout,
     TMaybe<double> startingApprox,
     TRestorableFastRng64* rand,
     NPar::TLocalExecutor* localExecutor
@@ -184,6 +185,9 @@ TFold TFold::BuildDynamicFold(
                 &bt.Approx
             );
         }
+        if (isDropout) {
+            CopyApprox(bt.Approx, &bt.AllTreeApprox, localExecutor);
+        }
         AllocateRank2(approxDimension, bt.TailFinish, bt.WeightedDerivatives);
         AllocateRank2(approxDimension, bt.TailFinish, bt.SampleWeightedDerivatives);
         if (hasPairwiseWeights) {
@@ -218,6 +222,7 @@ TFold TFold::BuildPlainFold(
     int approxDimension,
     bool storeExpApproxes,
     bool hasPairwiseWeights,
+    bool isDropout,
     TMaybe<double> startingApprox,
     TRestorableFastRng64* rand,
     NPar::TLocalExecutor* localExecutor
@@ -279,6 +284,9 @@ TFold TFold::BuildPlainFold(
             storeExpApproxes,
             &bt.Approx
         );
+    }
+    if (isDropout) {
+        CopyApprox(bt.Approx, &bt.AllTreeApprox, localExecutor);
     }
     ff.BodyTailArr.emplace_back(std::move(bt));
     return ff;

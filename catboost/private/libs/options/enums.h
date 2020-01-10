@@ -5,6 +5,12 @@
 #include <util/system/types.h>
 
 
+enum class EDropoutType {
+    None,
+    Dart,
+    Conventional
+};
+
 enum class EConvertTargetPolicy {
     CastFloat,
     UseClassNames,

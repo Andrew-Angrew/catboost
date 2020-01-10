@@ -17,6 +17,7 @@ NCatboostOptions::TBoostingOptions::TBoostingOptions(ETaskType taskType)
     , BoostFromAverage("boost_from_average", false)
     , ApproxOnFullHistory("approx_on_full_history", false, taskType)
     , ModelShrinkRate("model_shrink_rate", 0.0f, taskType)
+    , DropoutOptions("dropout_options", TTreeDropoutOptions(), taskType)
     , MinFoldSize("min_fold_size", 100, taskType)
     , DataPartitionType("data_partition", EDataPartitionType::FeatureParallel, taskType)
 {
@@ -24,27 +25,33 @@ NCatboostOptions::TBoostingOptions::TBoostingOptions(ETaskType taskType)
 
 void NCatboostOptions::TBoostingOptions::Load(const NJson::TJsonValue& options) {
     CheckedLoad(options,
-            &LearningRate, &FoldLenMultiplier, &PermutationBlockSize, &IterationCount, &OverfittingDetector,
-            &BoostingType, &BoostFromAverage, &PermutationCount, &MinFoldSize, &ApproxOnFullHistory,
-            &DataPartitionType, &ModelShrinkRate);
+        &LearningRate, &FoldLenMultiplier, &PermutationBlockSize, &IterationCount, &OverfittingDetector,
+        &BoostingType, &BoostFromAverage, &PermutationCount, &MinFoldSize, &ApproxOnFullHistory,
+        &DataPartitionType, &ModelShrinkRate, &DropoutOptions);
 
     Validate();
 }
 
 void NCatboostOptions::TBoostingOptions::Save(NJson::TJsonValue* options) const {
     SaveFields(options,
-            LearningRate, FoldLenMultiplier, PermutationBlockSize, IterationCount, OverfittingDetector,
-            BoostingType, BoostFromAverage, PermutationCount, MinFoldSize, ApproxOnFullHistory,
-            DataPartitionType, ModelShrinkRate);
+        LearningRate, FoldLenMultiplier, PermutationBlockSize, IterationCount, OverfittingDetector,
+        BoostingType, BoostFromAverage, PermutationCount, MinFoldSize, ApproxOnFullHistory,
+        DataPartitionType, ModelShrinkRate, DropoutOptions);
 }
 
 bool NCatboostOptions::TBoostingOptions::operator==(const TBoostingOptions& rhs) const {
-    return std::tie(LearningRate, FoldLenMultiplier, PermutationBlockSize, IterationCount, OverfittingDetector,
-            ApproxOnFullHistory, BoostingType, BoostFromAverage, PermutationCount,
-            MinFoldSize, DataPartitionType, ModelShrinkRate) ==
-        std::tie(rhs.LearningRate, rhs.FoldLenMultiplier, rhs.PermutationBlockSize, rhs.IterationCount,
-                rhs.OverfittingDetector, rhs.ApproxOnFullHistory, rhs.BoostingType, rhs.BoostFromAverage,
-                rhs.PermutationCount, rhs.MinFoldSize, rhs.DataPartitionType, rhs.ModelShrinkRate);
+    return (
+        std::tie(
+            LearningRate, FoldLenMultiplier, PermutationBlockSize, IterationCount,
+            OverfittingDetector, ApproxOnFullHistory, BoostingType, BoostFromAverage,
+            PermutationCount, MinFoldSize, DataPartitionType, ModelShrinkRate,
+            DropoutOptions) ==
+        std::tie(
+            rhs.LearningRate, rhs.FoldLenMultiplier, rhs.PermutationBlockSize, rhs.IterationCount,
+            rhs.OverfittingDetector, rhs.ApproxOnFullHistory, rhs.BoostingType, rhs.BoostFromAverage,
+            rhs.PermutationCount, rhs.MinFoldSize, rhs.DataPartitionType, rhs.ModelShrinkRate,
+            rhs.DropoutOptions)
+    );
 }
 
 bool NCatboostOptions::TBoostingOptions::operator!=(const TBoostingOptions& rhs) const {
@@ -53,6 +60,7 @@ bool NCatboostOptions::TBoostingOptions::operator!=(const TBoostingOptions& rhs)
 
 void NCatboostOptions::TBoostingOptions::Validate() const {
     OverfittingDetector->Validate();
+    DropoutOptions->Validate();
     CB_ENSURE(FoldLenMultiplier.Get() > 1.0f, "fold len multiplier should be greater than 1");
     CB_ENSURE(IterationCount.Get() > 0, "Iterations count should be positive");
 
@@ -66,7 +74,10 @@ void NCatboostOptions::TBoostingOptions::Validate() const {
         }
     }
 
-    CB_ENSURE(!(ApproxOnFullHistory.GetUnchecked() && BoostingType.Get() == EBoostingType::Plain), "Can't use approx-on-full-history with Plain boosting-type");
+    CB_ENSURE(
+        !(ApproxOnFullHistory.GetUnchecked() && BoostingType.Get() == EBoostingType::Plain),
+        "Can't use approx-on-full-history with Plain boosting-type"
+    );
     if (LearningRate.IsSet()) {
         CB_ENSURE(Abs(LearningRate.Get()) > std::numeric_limits<float>::epsilon(), "Learning rate should be non-zero");
         if (LearningRate.Get() > 1) {

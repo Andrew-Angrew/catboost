@@ -42,6 +42,7 @@ static void UpdateLearningFold(
     TLearnContext* ctx
 ) {
     TVector<TVector<TVector<double>>> approxDelta;
+    TVector<TVector<TVector<double>>> foldTreeLeafValues;
 
     CalcApproxForLeafStruct(
         data,
@@ -50,23 +51,21 @@ static void UpdateLearningFold(
         bestSplitTree,
         randomSeed,
         ctx,
-        &approxDelta
+        &approxDelta,
+        &foldTreeLeafValues
     );
 
+    const auto learningRate = ctx->Params.BoostingOptions->LearningRate;
+    for (int bodyTailId = 0; bodyTailId < fold->BodyTailArr.ysize(); ++bodyTailId) {
+        fold->BodyTailArr[bodyTailId].LeafValues.push_back(
+            ScaleElementwise(learningRate, foldTreeLeafValues[bodyTailId])
+        );
+    }
+
     if (error.GetIsExpApprox()) {
-        UpdateBodyTailApprox</*StoreExpApprox*/true>(
-            approxDelta,
-            ctx->Params.BoostingOptions->LearningRate,
-            ctx->LocalExecutor,
-            fold
-        );
+        UpdateBodyTailApprox</*StoreExpApprox*/true>(approxDelta, learningRate, ctx->LocalExecutor, fold);
     } else {
-        UpdateBodyTailApprox</*StoreExpApprox*/false>(
-            approxDelta,
-            ctx->Params.BoostingOptions->LearningRate,
-            ctx->LocalExecutor,
-            fold
-        );
+        UpdateBodyTailApprox</*StoreExpApprox*/false>(approxDelta, learningRate, ctx->LocalExecutor, fold);
     }
 }
 
@@ -210,6 +209,11 @@ void TrainOneIteration(const NCB::TTrainingForCPUDataProviders& data, TLearnCont
         } else {
             ctx->LearnProgress->ModelShrinkHistory.push_back(1.0);
         }
+    }
+
+    if (ctx->Params.BoostingOptions->DropoutOptions->DropoutType.Get() != EDropoutType::None) {
+        // select trees to drop
+        // drop trees if for all
     }
 
     TSplitTree bestSplitTree;

@@ -12,6 +12,7 @@
 #include <catboost/libs/helpers/parallel_tasks.h>
 #include <catboost/libs/helpers/progress_helper.h>
 #include <catboost/libs/helpers/vector_helpers.h>
+#include <catboost/libs/helpers/restorable_rng.h>
 #include <catboost/libs/model/model.h>
 #include <catboost/private/libs/algo_helpers/error_functions.h>
 #include <catboost/private/libs/distributed/master.h>
@@ -62,6 +63,7 @@ TFoldsCreationParams::TFoldsCreationParams(
     , HasPairwiseWeights(UsesPairsForCalculation(params.LossFunctionDescription->GetLossFunction()))
     , FoldLenMultiplier(params.BoostingOptions->FoldLenMultiplier)
     , IsAverageFoldPermuted(false) // properly inited below
+    , IsDropout(params.BoostingOptions->DropoutOptions->DropoutType.Get() != EDropoutType::None)
     , StartingApprox(startingApprox)
     , LossFunction(params.LossFunctionDescription->LossFunction.Get())
 {
@@ -503,6 +505,7 @@ TLearnProgress::TLearnProgress(
                     foldsCreationParams.FoldLenMultiplier,
                     foldsCreationParams.StoreExpApproxes,
                     foldsCreationParams.HasPairwiseWeights,
+                    foldsCreationParams.IsDropout,
                     StartingApprox,
                     &Rand,
                     localExecutor
@@ -520,6 +523,7 @@ TLearnProgress::TLearnProgress(
                     ApproxDimension,
                     foldsCreationParams.StoreExpApproxes,
                     foldsCreationParams.HasPairwiseWeights,
+                    foldsCreationParams.IsDropout,
                     StartingApprox,
                     &Rand,
                     localExecutor
@@ -536,6 +540,7 @@ TLearnProgress::TLearnProgress(
         ApproxDimension,
         foldsCreationParams.StoreExpApproxes,
         foldsCreationParams.HasPairwiseWeights,
+        foldsCreationParams.IsDropout,
         StartingApprox,
         &Rand,
         localExecutor
@@ -822,6 +827,22 @@ bool TLearnContext::UseTreeLevelCaching() const {
 
 bool TLearnContext::GetHasWeights() const {
     return HasWeights;
+}
+
+void TLearnContext::SelectTreesToDrop() {
+    const int treeCount = static_cast<int>(LearnProgress->TreeStruct.size());
+    const double pDrop = Params.BoostingOptions->DropoutOptions->TreeDropProbability.Get();
+    const auto dropoutType = Params.BoostingOptions->DropoutOptions->DropoutType.Get();
+    const auto treeScores = GenRandUniformVector(treeCount, LearnProgress->Rand.GenRand());
+    TreesToDrop.clear();
+    for (int treeIndex = 0; treeIndex < treeCount; ++treeIndex) {
+        if (treeScores[treeIndex] < pDrop) {
+            TreesToDrop.push_back(treeIndex);
+        }
+    }
+    if (dropoutType == EDropoutType::Dart && treeCount > 0 && TreesToDrop.empty()) {
+        TreesToDrop.push_back(static_cast<int>(LearnProgress->Rand.Uniform(treeCount)));
+    }
 }
 
 bool NeedToUseTreeLevelCaching(

@@ -142,7 +142,8 @@ static void CalcLeafDersImpl(
     TConstArrayRef<float> weights,
     TConstArrayRef<TDers> approxDers,
     TArrayRef<TDers> leafDers, // view of size rowCount
-    TArrayRef<double> leafWeights) {
+    TArrayRef<double> leafWeights
+) {
     for (auto rowIdx : xrange(rowStart, rowStart + rowCount)) {
         TDers& ders = leafDers[leafIndices[rowIdx]];
         ders.Der1 += approxDers[rowIdx - rowStart].Der1;
@@ -967,7 +968,8 @@ void CalcApproxForLeafStruct(
     const TSplitTree& tree,
     ui64 randomSeed,
     TLearnContext* ctx,
-    TVector<TVector<TVector<double>>>* approxesDelta // [bodyTailId][approxDim][docIdxInPermuted]
+    TVector<TVector<TVector<double>>>* approxesDelta, // [bodyTailId][approxDim][docIdxInPermuted]
+    TVector<TVector<TVector<double>>>* allFoldLeafDeltas // [bodyTailId][approxDim][leafIndex]
 ) {
     const TVector<TIndexType> indices = BuildIndices(fold, tree, data.Learn, data.Test, ctx->LocalExecutor);
     const int approxDimension = ctx->LearnProgress->ApproxDimension;
@@ -981,13 +983,16 @@ void CalcApproxForLeafStruct(
         randomSeeds = GenRandUI64Vector(fold.BodyTailArr.ysize(), randomSeed);
     }
     approxesDelta->resize(fold.BodyTailArr.ysize());
+    allFoldLeafDeltas->resize(fold.BodyTailArr.ysize());
     const bool isMultiRegression = dynamic_cast<const TMultiDerCalcer*>(&error) != nullptr;
     ctx->LocalExecutor->ExecRangeWithThrow(
         [&](int bodyTailId) {
             const TFold::TBodyTail& bt = fold.BodyTailArr[bodyTailId];
             TVector<TVector<double>>& approxDeltas = (*approxesDelta)[bodyTailId];
+            TVector<TVector<double>>& leafDeltas = (*allFoldLeafDeltas)[bodyTailId];
             const double initValue = GetNeutralApprox(error.GetIsExpApprox());
             NCB::FillRank2(initValue, approxDimension, bt.TailFinish, &approxDeltas, ctx->LocalExecutor);
+            NCB::FillRank2(0.0, approxDimension, leafCount, &leafDeltas, ctx->LocalExecutor);
             if (approxDimension == 1 && !isMultiRegression) {
                 CalcApproxDeltaSimple(
                     fold,
@@ -999,7 +1004,7 @@ void CalcApproxForLeafStruct(
                     treeMonotoneConstraints,
                     ctx,
                     &approxDeltas,
-                    /*sumLeafDeltas*/ nullptr);
+                    &leafDeltas);
             } else {
                 CalcApproxDeltaMulti(
                     fold,
@@ -1009,7 +1014,7 @@ void CalcApproxForLeafStruct(
                     indices,
                     ctx,
                     &approxDeltas,
-                    /*sumLeafDeltas*/ nullptr);
+                    &leafDeltas); // TODO: check if leafDeltas handled correctly here
             }
         },
         0,

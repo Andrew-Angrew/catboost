@@ -334,6 +334,14 @@ void NCatboostOptions::PlainJsonToOptions(
     CopyOptionWithNewKey(plainOptions, "od_wait", "wait_iterations", &odConfig, &seenKeys);
     CopyOptionWithNewKey(plainOptions, "od_type", "type", &odConfig, &seenKeys);
 
+    auto& dropoutOptionsRef = boostingOptionsRef["dropout_options"];
+    dropoutOptionsRef.SetType(NJson::JSON_MAP);
+
+    CopyOption(plainOptions, "dropout_type", &dropoutOptionsRef, &seenKeys);
+    CopyOption(plainOptions, "p_drop", &dropoutOptionsRef, &seenKeys);
+    CopyOption(plainOptions, "drop_trees_for_split_search_only", &dropoutOptionsRef, &seenKeys);
+
+    // tree options
     auto& treeOptions = trainOptions["tree_learner_options"];
     treeOptions.SetType(NJson::JSON_MAP);
     CopyOption(plainOptions, "rsm", &treeOptions, &seenKeys);
@@ -602,6 +610,26 @@ void NCatboostOptions::ConvertOptionsToPlainJson(
             CB_ENSURE(optionsCopyOdConfig.GetMapSafe().empty(), "od_config: key " + optionsCopyOdConfig.GetMapSafe().begin()->first + " wasn't added to plain options.");
             DeleteSeenOption(&optionsCopyBoosting, "od_config");
         }
+
+        if (boostingOptionsRef.Has("dropout_options")) {
+            const auto& dropoutOptionsRef = boostingOptionsRef["dropout_options"];
+            auto& optionsCopyDropout = optionsCopyBoosting["dropout_options"];
+
+            CopyOption(dropoutOptionsRef, "dropout_type", &plainOptionsJson, &seenKeys);
+            DeleteSeenOption(&optionsCopyDropout, "dropout_type");
+
+            CopyOption(dropoutOptionsRef, "p_drop", &plainOptionsJson, &seenKeys);
+            DeleteSeenOption(&optionsCopyDropout, "p_drop");
+
+            CopyOption(dropoutOptionsRef, "drop_trees_for_split_search_only", &plainOptionsJson, &seenKeys);
+            DeleteSeenOption(&optionsCopyDropout, "drop_trees_for_split_search_only");
+
+            CB_ENSURE(
+                optionsCopyDropout.GetMapSafe().empty(),
+                "boosting_options: dropout_options: key " + optionsCopyDropout.GetMapSafe().begin()->first + " wasn't added to plain options.");
+            DeleteSeenOption(&optionsCopyBoosting, "dropout_options");
+        }
+
         CB_ENSURE(optionsCopyBoosting.GetMapSafe().empty(), "boosting_options: key " + optionsCopyBoosting.GetMapSafe().begin()->first + " wasn't added to plain options.");
         DeleteSeenOption(&optionsCopy, "boosting_options");
     }

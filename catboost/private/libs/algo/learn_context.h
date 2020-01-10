@@ -39,6 +39,7 @@ struct TFoldsCreationParams {
     bool HasPairwiseWeights;
     float FoldLenMultiplier;
     bool IsAverageFoldPermuted;
+    bool IsDropout;
     TMaybe<double> StartingApprox;
     ELossFunction LossFunction;
 
@@ -55,8 +56,8 @@ public:
 
 struct TLearnProgress {
     TVector<TFold> Folds;
-    TFold AveragingFold;
-    TVector<TVector<double>> AvrgApprox;          //       [dim][docIdx]
+    TFold AveragingFold; // may hold exponentiated approx
+    TVector<TVector<double>> AvrgApprox;          //       [dim][docIdx], always not exponentiated
     TVector<TVector<TVector<double>>> TestApprox; // [test][dim][docIdx]
     TVector<TVector<double>> BestTestApprox;      //       [dim][docIdx]
     TMaybe<double> StartingApprox;
@@ -197,6 +198,7 @@ public:
     bool TryLoadProgress(std::function<void(IInputStream*)> onSnapshotLoaded = [] (IInputStream* /*snapshot*/) {});
     bool UseTreeLevelCaching() const;
     bool GetHasWeights() const;
+    void SelectTreesToDrop();
 
 public:
     THolder<TLearnProgress> LearnProgress;
@@ -207,7 +209,8 @@ public:
     TCalcScoreFold SampledDocs;
     TBucketStatsCache PrevTreeLevelStats;
     TProfileInfo Profile;
-
+    // indexes of trees selected for dropout at current iteration (used when dropout_type != None).
+    TVector<int> TreesToDrop; 
     bool LearnAndTestDataPackingAreCompatible;
 
 private:

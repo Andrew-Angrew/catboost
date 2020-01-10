@@ -57,6 +57,12 @@ public:
         TVector<TVector<double>> SampleWeightedDerivatives;  // [dim][]
         TVector<float> PairwiseWeights;  // [dim][]
         TVector<float> SamplePairwiseWeights;  // [dim][]
+        TVector<TVector<TVector<double>>> LeafValues;  // [iteration][dim][leafIndex], may be empty
+        /* Total approx of all trees. Used when tree dropout is enabled. In that case .Approx holds
+         * approxes for some subsample of trees.
+         * Empty if dropout is not used. Always not exponentiated.
+         */
+        TVector<TVector<double>> AllTreeApprox; // [dim][]
 
         const int BodyQueryFinish;
         const int TailQueryFinish;
@@ -124,6 +130,7 @@ public:
         double multiplier,
         bool storeExpApproxes,
         bool hasPairwiseWeights,
+        bool isDropout,
         TMaybe<double> startingApprox,
         TRestorableFastRng64* rand,
         NPar::TLocalExecutor* localExecutor
@@ -137,6 +144,7 @@ public:
         int approxDimension,
         bool storeExpApproxes,
         bool hasPairwiseWeights,
+        bool isDropout,
         TMaybe<double> startingApprox,
         TRestorableFastRng64* rand,
         NPar::TLocalExecutor* localExecutor
