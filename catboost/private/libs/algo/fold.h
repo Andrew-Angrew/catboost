@@ -120,6 +120,14 @@ public:
 
     void SaveApproxes(IOutputStream* s) const;
     void LoadApproxes(IInputStream* s);
+    void InitBodyTailApprox(
+        TMaybe<double> startingApprox,
+        int approxDimension,
+        bool storeExpApproxes,
+        bool isDropout,
+        const NCB::TMaybeData<TConstArrayRef<TConstArrayRef<float>>>& baseline,
+        TBodyTail* bt
+    );
 
     static TFold BuildDynamicFold(
         const NCB::TTrainingForCPUDataProvider& learnData,

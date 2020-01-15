@@ -44,3 +44,29 @@ void UpdateAvrgApprox(
     TLearnProgress* learnProgress,
     NPar::TLocalExecutor* localExecutor
 );
+
+template <class T>
+void InitApproxFromBaseline(
+    TConstArrayRef<TConstArrayRef<T>> baseline,
+    TConstArrayRef<ui32> learnPermutation,
+    bool storeExpApproxes,
+    bool isDropout,
+    TFold::TBodyTail* bodyTail 
+) {
+    const ui32 learnSampleCount = learnPermutation.size();
+    const int approxDimension = bodyTail->Approx.ysize();
+    for (int dim = 0; dim < approxDimension; ++dim) {
+        for (ui32 docId : xrange(0u, static_cast<ui32>(bodyTail->TailFinish))) {
+            ui32 initialIdx = docId;
+            if (docId < learnSampleCount) {
+                initialIdx = learnPermutation[docId];
+            }
+            bodyTail->Approx[dim][docId] = baseline[dim][initialIdx];
+        }
+    }
+    if (isDropout) {
+        bodyTail->AllTreeApprox = bodyTail->Approx;
+    }
+    ExpApproxIf(storeExpApproxes, &bodyTail->Approx);
+}
+

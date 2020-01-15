@@ -92,6 +92,40 @@ static void InitPermutationData(
     }
 }
 
+void TFold::InitBodyTailApprox(
+    TMaybe<double> startingApprox,
+    int approxDimension,
+    bool storeExpApproxes,
+    bool isDropout,
+    const TMaybeData<TConstArrayRef<TConstArrayRef<float>>>& baseline,
+    TFold::TBodyTail* bt
+) {
+    bt->Approx.resize(
+        approxDimension,
+        TVector<double>(
+            bt->TailFinish,
+            startingApprox ? ExpApproxIf(storeExpApproxes, *startingApprox) : GetNeutralApprox(storeExpApproxes)));
+    if (!baseline && isDropout) {
+        bt->AllTreeApprox.resize(
+            approxDimension,
+            TVector<double>(
+                bt->TailFinish,
+                startingApprox ? *startingApprox : GetNeutralApprox(/*storeExpApproxes*/ false)
+            )
+        );
+    }
+    if (baseline) {
+        InitApproxFromBaseline(
+            *baseline,
+            GetLearnPermutationArray(),
+            /* storeExpApproxes */ false,
+            isDropout,
+            bt
+        );
+    }
+    AllocateRank2(approxDimension, bt->TailFinish, bt->WeightedDerivatives);
+    AllocateRank2(approxDimension, bt->TailFinish, bt->SampleWeightedDerivatives);
+}
 
 TFold TFold::BuildDynamicFold(
     const NCB::TTrainingForCPUDataProvider& learnData,
@@ -166,30 +200,8 @@ TFold TFold::BuildDynamicFold(
             : Accumulate(ff.GetLearnWeights().begin(), ff.GetLearnWeights().begin() + bodyFinish, (double)0.0);
 
         TFold::TBodyTail bt(bodyQueryFinish, tailQueryFinish, bodyFinish, tailFinish, bodySumWeight);
+        ff.InitBodyTailApprox(startingApprox, approxDimension, storeExpApproxes, isDropout, baseline, &bt);
 
-        TVector<double> initialApprox(bt.TailFinish, GetNeutralApprox(storeExpApproxes));
-        if (startingApprox) {
-            double initApprox = ExpApproxIf(storeExpApproxes, *startingApprox);
-            for (ui32 i = leftPartLen; i < (ui32)bt.TailFinish; ++i) {
-                initialApprox[i] = initApprox;
-            }
-        }
-        bt.Approx.resize(approxDimension, initialApprox);
-        if (baseline) {
-            InitApproxFromBaseline(
-                leftPartLen,
-                bt.TailFinish,
-                *baseline,
-                ff.GetLearnPermutationArray(),
-                storeExpApproxes,
-                &bt.Approx
-            );
-        }
-        if (isDropout) {
-            CopyApprox(bt.Approx, &bt.AllTreeApprox, localExecutor);
-        }
-        AllocateRank2(approxDimension, bt.TailFinish, bt.WeightedDerivatives);
-        AllocateRank2(approxDimension, bt.TailFinish, bt.SampleWeightedDerivatives);
         if (hasPairwiseWeights) {
             bt.PairwiseWeights.resize(bt.TailFinish);
             bt.PairwiseWeights.insert(
@@ -261,33 +273,15 @@ TFold TFold::BuildPlainFold(
         learnSampleCountAsInt,
         ff.GetSumWeight()
     );
+    TMaybeData<TConstArrayRef<TConstArrayRef<float>>> baseline = learnData.TargetData->GetBaseline();
+    ff.InitBodyTailApprox(startingApprox, approxDimension, storeExpApproxes, isDropout, baseline, &bt);
 
-    bt.Approx.resize(approxDimension,
-        TVector<double>(
-            learnSampleCount,
-            startingApprox ? ExpApproxIf(storeExpApproxes, *startingApprox) : GetNeutralApprox(storeExpApproxes)));
-    AllocateRank2(approxDimension, learnSampleCount, bt.WeightedDerivatives);
-    AllocateRank2(approxDimension, learnSampleCount, bt.SampleWeightedDerivatives);
     if (hasPairwiseWeights) {
         bt.PairwiseWeights.resize(learnSampleCount);
         CalcPairwiseWeights(ff.LearnQueriesInfo, bt.TailQueryFinish, &bt.PairwiseWeights);
         bt.SamplePairwiseWeights.resize(learnSampleCount);
     }
 
-    TMaybeData<TConstArrayRef<TConstArrayRef<float>>> baseline = learnData.TargetData->GetBaseline();
-    if (baseline) {
-        InitApproxFromBaseline(
-            0,
-            learnSampleCount,
-            *baseline,
-            ff.GetLearnPermutationArray(),
-            storeExpApproxes,
-            &bt.Approx
-        );
-    }
-    if (isDropout) {
-        CopyApprox(bt.Approx, &bt.AllTreeApprox, localExecutor);
-    }
     ff.BodyTailArr.emplace_back(std::move(bt));
     return ff;
 }

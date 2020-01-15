@@ -592,8 +592,8 @@ TLearnProgress::TLearnProgress(
         SetSeparateInitModel(
             **initModel,
             initModelApplyCompatiblePools,
-            foldsCreationParams.IsOrderedBoosting,
             foldsCreationParams.StoreExpApproxes,
+            foldsCreationParams.IsDropout,
             cpuRamLimit,
             localExecutor
         );
@@ -604,8 +604,8 @@ TLearnProgress::TLearnProgress(
 void TLearnProgress::SetSeparateInitModel(
     const TFullModel& initModel,
     const TDataProviders& initModelApplyCompatiblePools,
-    bool isOrderedBoosting,
     bool storeExpApproxes,
+    bool isDropout,
     ui64 cpuRamLimit,
     NPar::TLocalExecutor* localExecutor) {
 
@@ -685,36 +685,33 @@ void TLearnProgress::SetSeparateInitModel(
 
     tasks.push_back(
         [&] () {
-            const ui32 learnObjectCount = initModelApplyCompatiblePools.Learn->GetObjectCount();
-
             AvrgApprox = calcApproxFunction(*initModelApplyCompatiblePools.Learn->ObjectsData);
 
             TVector<TConstArrayRef<double>> approxRef(AvrgApprox.begin(), AvrgApprox.end());
 
             TVector<std::function<void()>> tasks;
 
-            auto setFoldApproxes = [&] (bool isPlainFold, TFold* fold) {
+            auto setFoldApproxes = [&] (TFold* fold) {
                 for (auto& bodyTail : fold->BodyTailArr) {
                     InitApproxFromBaseline(
-                        isPlainFold ? ui32(0) : SafeIntegerCast<ui32>(bodyTail.BodyFinish),
-                        isPlainFold ? learnObjectCount : SafeIntegerCast<ui32>(bodyTail.TailFinish),
                         TConstArrayRef<TConstArrayRef<double>>(approxRef),
                         fold->GetLearnPermutationArray(),
                         storeExpApproxes,
-                        &bodyTail.Approx);
+                        isDropout,
+                        &bodyTail);
                 }
             };
 
             for (auto foldIdx : xrange(Folds.size())) {
                 tasks.push_back(
                     [&, foldIdx] () {
-                        setFoldApproxes(!isOrderedBoosting, &Folds[foldIdx]);
+                        setFoldApproxes(&Folds[foldIdx]);
                     }
                 );
             }
             tasks.push_back(
                 [&] () {
-                    setFoldApproxes(/*isPlainFold*/ true, &AveragingFold);
+                    setFoldApproxes(&AveragingFold);
                 }
             );
 

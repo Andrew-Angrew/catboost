@@ -128,8 +128,8 @@ public:
     void SetSeparateInitModel(
         const TFullModel& initModel,
         const NCB::TDataProviders& initModelApplyCompatiblePools,
-        bool isOrderedBoosting,
         bool storeExpApproxes,
+        bool isDropout,
         ui64 cpuRamLimit,
         NPar::TLocalExecutor* localExecutor);
 
