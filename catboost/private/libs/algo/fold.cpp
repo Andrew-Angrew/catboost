@@ -203,7 +203,7 @@ TFold TFold::BuildDynamicFold(
         ff.InitBodyTailApprox(startingApprox, approxDimension, storeExpApproxes, isDropout, baseline, &bt);
 
         if (hasPairwiseWeights) {
-            bt.PairwiseWeights.resize(bt.TailFinish);
+            bt.PairwiseWeights.clear();
             bt.PairwiseWeights.insert(
                 bt.PairwiseWeights.begin(),
                 pairwiseWeights.begin(),
