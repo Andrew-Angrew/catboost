@@ -1014,7 +1014,7 @@ void CalcApproxForLeafStruct(
                     indices,
                     ctx,
                     &approxDeltas,
-                    &leafDeltas); // TODO: check if leafDeltas handled correctly here
+                    &leafDeltas); // TODO(strashila): check if leafDeltas handled correctly here
             }
         },
         0,

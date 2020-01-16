@@ -4,6 +4,7 @@
 #include "approx_dimension.h"
 #include "approx_updater_helpers.h"
 #include "calc_score_cache.h"
+#include "tree_dropout.h"
 
 #include "helpers.h"
 #include "online_ctr.h"
@@ -826,20 +827,18 @@ bool TLearnContext::GetHasWeights() const {
     return HasWeights;
 }
 
-void TLearnContext::SelectTreesToDrop() {
-    const int treeCount = static_cast<int>(LearnProgress->TreeStruct.size());
-    const double pDrop = Params.BoostingOptions->DropoutOptions->TreeDropProbability.Get();
+void TLearnContext::PrepareApproxesToIteration() {
     const auto dropoutType = Params.BoostingOptions->DropoutOptions->DropoutType.Get();
-    const auto treeScores = GenRandUniformVector(treeCount, LearnProgress->Rand.GenRand());
-    TreesToDrop.clear();
-    for (int treeIndex = 0; treeIndex < treeCount; ++treeIndex) {
-        if (treeScores[treeIndex] < pDrop) {
-            TreesToDrop.push_back(treeIndex);
-        }
+    if (dropoutType == EDropoutType::None) {
+        return;
     }
-    if (dropoutType == EDropoutType::Dart && treeCount > 0 && TreesToDrop.empty()) {
-        TreesToDrop.push_back(static_cast<int>(LearnProgress->Rand.Uniform(treeCount)));
-    }
+    const auto treesToDrop = SelectTreesToDrop(
+        Params.BoostingOptions->DropoutOptions->TreeDropProbability.Get(),
+        static_cast<int>(LearnProgress->TreeStruct.size()),
+        dropoutType,
+        &LearnProgress->Rand
+    );
+
 }
 
 bool NeedToUseTreeLevelCaching(

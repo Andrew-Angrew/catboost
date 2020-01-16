@@ -198,7 +198,7 @@ public:
     bool TryLoadProgress(std::function<void(IInputStream*)> onSnapshotLoaded = [] (IInputStream* /*snapshot*/) {});
     bool UseTreeLevelCaching() const;
     bool GetHasWeights() const;
-    void SelectTreesToDrop();
+    void PrepareApproxesToIteration();
 
 public:
     THolder<TLearnProgress> LearnProgress;
@@ -210,7 +210,6 @@ public:
     TBucketStatsCache PrevTreeLevelStats;
     TProfileInfo Profile;
     // indexes of trees selected for dropout at current iteration (used when dropout_type != None).
-    TVector<int> TreesToDrop; 
     bool LearnAndTestDataPackingAreCompatible;
 
 private:

@@ -35,6 +35,14 @@ inline void UpdateBodyTailApprox(
     }
 }
 
+void ApplyLeafDelta(
+    bool storeExpApprox,
+    const TVector<TIndexType>& indices,
+    const TVector<TVector<double>>& treeDelta,
+    TVector<TVector<double>>* approx,
+    NPar::TLocalExecutor* localExecutor
+);
+
 void UpdateAvrgApprox(
     bool storeExpApprox,
     ui32 learnSampleCount,

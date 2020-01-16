@@ -2,14 +2,67 @@
 
 #include "learn_context.h"
 
+#include <catboost/private/libs/functools/forward_as_const.h>
+
 #include <util/generic/cast.h>
 
 
 using namespace NCB;
 
 
-template <bool StoreExpApprox>
-static void UpdateAvrgApprox(
+template <bool StoreExpApprox, bool UseLearnPermutation>
+static void ApplyLeafDelta(
+    TConstArrayRef<TIndexType> indices,
+    TConstArrayRef<ui32> learnPermutation,
+    const TVector<TVector<double>>& treeDelta,
+    TVector<TVector<double>>* approx,
+    NPar::TLocalExecutor* localExecutor
+) {
+    const auto updateApprox = [indices, learnPermutation] (
+        TConstArrayRef<double> delta,
+        TArrayRef<double> approx,
+        size_t idx
+    ) {
+        if constexpr (UseLearnPermutation) {
+            approx[learnPermutation[idx]] = UpdateApprox<StoreExpApprox>(approx[idx], delta[indices[idx]]);
+        } else {
+            Y_UNUSED(learnPermutation);
+            approx[idx] = UpdateApprox<StoreExpApprox>(approx[idx], delta[indices[idx]]);
+        }
+    };
+    TVector<TVector<double>> expTreeDelta;
+    if constexpr (StoreExpApprox) {
+        expTreeDelta = treeDelta;
+        ExpApproxIf(StoreExpApprox, &expTreeDelta);
+    }
+    const auto* properTreeDelta = StoreExpApprox ? &expTreeDelta : &treeDelta;
+    UpdateApprox(updateApprox, *properTreeDelta, approx, localExecutor);
+}
+
+void ApplyLeafDelta(
+    bool storeExpApprox,
+    TConstArrayRef<TIndexType> indices,
+    TConstArrayRef<ui32> learnPermutation,
+    const TVector<TVector<double>>& treeDelta,
+    TVector<TVector<double>>* approx,
+    NPar::TLocalExecutor* localExecutor
+) {
+    ForwardArgsAsIntegralConst(
+        [&] (auto storeExpApproxAsConst, auto useLearnPermutation) {
+            ::ApplyLeafDelta<storeExpApproxAsConst, useLearnPermutation>(
+                indices,
+                learnPermutation,
+                treeDelta,
+                approx,
+                localExecutor
+            );
+        },
+        storeExpApprox, !learnPermutation.empty()
+    );
+}
+
+void UpdateAvrgApprox(
+    bool storeExpApprox,
     ui32 learnSampleCount,
     const TVector<TIndexType>& indices,
     const TVector<TVector<double>>& treeDelta,
@@ -26,31 +79,28 @@ static void UpdateAvrgApprox(
                 if (learnSampleCount == 0) {
                     return;
                 }
-                TConstArrayRef<TIndexType> indicesRef(indices);
-                const auto updateApprox = [=](
-                    TConstArrayRef<double> delta,
-                    TArrayRef<double> approx,
-                    size_t idx
-                ) {
-                    approx[idx] = UpdateApprox<StoreExpApprox>(approx[idx], delta[indicesRef[idx]]);
-                };
-                TVector<TVector<double>> expTreeDelta(treeDelta);
-                ExpApproxIf(StoreExpApprox, &expTreeDelta);
                 TFold::TBodyTail& bt = learnProgress->AveragingFold.BodyTailArr[0];
                 Y_ASSERT(bt.Approx[0].ysize() == bt.TailFinish);
-                UpdateApprox(updateApprox, expTreeDelta, &bt.Approx, localExecutor);
+                TConstArrayRef<TIndexType> indicesRef(indices);
+                ApplyLeafDelta(
+                    storeExpApprox,
+                    indicesRef, 
+                    /* learnPermutation */ {},
+                    treeDelta,
+                    &bt.Approx,
+                    localExecutor
+                );
 
-                TConstArrayRef<ui32> learnPermutationRef(
-                    learnProgress->AveragingFold.GetLearnPermutationArray());
-                const auto updateAvrgApprox = [=](
-                    TConstArrayRef<double> delta,
-                    TArrayRef<double> approx,
-                    size_t idx
-                ) {
-                    approx[learnPermutationRef[idx]] += delta[indicesRef[idx]];
-                };
+                TConstArrayRef<ui32> learnPermutationRef(learnProgress->AveragingFold.GetLearnPermutationArray());
                 Y_ASSERT(learnProgress->AvrgApprox[0].size() == learnSampleCount);
-                UpdateApprox(updateAvrgApprox, treeDelta, &learnProgress->AvrgApprox, localExecutor);
+                ApplyLeafDelta(
+                    /* storeExpApprox */ false,
+                    indicesRef, 
+                    learnPermutationRef,
+                    treeDelta,
+                    &learnProgress->AvrgApprox,
+                    localExecutor
+                );
             } else { // test data set
                 const int testIdx = setIdx - 1;
                 const size_t testSampleCount = testData[testIdx]->GetObjectCount();
@@ -68,21 +118,6 @@ static void UpdateAvrgApprox(
         },
         0,
         1 + SafeIntegerCast<int>(testData.size()),
-        NPar::TLocalExecutor::WAIT_COMPLETE);
-}
-
-void UpdateAvrgApprox(
-    bool storeExpApprox,
-    ui32 learnSampleCount,
-    const TVector<TIndexType>& indices,
-    const TVector<TVector<double>>& treeDelta,
-    TConstArrayRef<TTrainingForCPUDataProviderPtr> testData, // can be empty
-    TLearnProgress* learnProgress,
-    NPar::TLocalExecutor* localExecutor
-) {
-    if (storeExpApprox) {
-        ::UpdateAvrgApprox<true>(learnSampleCount, indices, treeDelta, testData, learnProgress, localExecutor);
-    } else {
-        ::UpdateAvrgApprox<false>(learnSampleCount, indices, treeDelta, testData, learnProgress, localExecutor);
-    }
+        NPar::TLocalExecutor::WAIT_COMPLETE
+    );
 }

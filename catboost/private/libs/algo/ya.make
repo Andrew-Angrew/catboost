@@ -43,6 +43,7 @@ SRCS(
     roc_curve.cpp
     yetirank_helpers.cpp
     confusion_matrix.cpp
+    tree_dropout.cpp
 )
 
 PEERDIR(

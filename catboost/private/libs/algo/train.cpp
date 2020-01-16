@@ -69,7 +69,7 @@ static void UpdateLearningFold(
     }
 }
 
-static void ScaleAllApproxes(
+static void ScaleAllApproxes( // TODO(strashila): convert to TLearnProgress' method and move to PrepareApproxesToIteration
     const double approxMultiplier,
     const bool storeExpApprox,
     TLearnProgress* learnProgress,
@@ -211,10 +211,7 @@ void TrainOneIteration(const NCB::TTrainingForCPUDataProviders& data, TLearnCont
         }
     }
 
-    if (ctx->Params.BoostingOptions->DropoutOptions->DropoutType.Get() != EDropoutType::None) {
-        // select trees to drop
-        // drop trees if for all
-    }
+    ctx->PrepareApproxesToIteration(); // for tree dropout
 
     TSplitTree bestSplitTree;
     {
