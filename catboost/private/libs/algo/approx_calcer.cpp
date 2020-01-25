@@ -969,7 +969,8 @@ void CalcApproxForLeafStruct(
     ui64 randomSeed,
     TLearnContext* ctx,
     TVector<TVector<TVector<double>>>* approxesDelta, // [bodyTailId][approxDim][docIdxInPermuted]
-    TVector<TVector<TVector<double>>>* allFoldLeafDeltas // [bodyTailId][approxDim][leafIndex]
+    TVector<TVector<TVector<double>>>* allFoldLeafDeltas, // [bodyTailId][approxDim][leafIndex], may be nullptr
+    TVector<TIndexType>* leafIndices
 ) {
     const TVector<TIndexType> indices = BuildIndices(fold, tree, data.Learn, data.Test, ctx->LocalExecutor);
     const int approxDimension = ctx->LearnProgress->ApproxDimension;
@@ -989,10 +990,13 @@ void CalcApproxForLeafStruct(
         [&](int bodyTailId) {
             const TFold::TBodyTail& bt = fold.BodyTailArr[bodyTailId];
             TVector<TVector<double>>& approxDeltas = (*approxesDelta)[bodyTailId];
-            TVector<TVector<double>>& leafDeltas = (*allFoldLeafDeltas)[bodyTailId];
+            TVector<TVector<double>>* leafDeltas = nullptr;
+            if (allFoldLeafDeltas) {
+                leafDeltas = &(*allFoldLeafDeltas)[bodyTailId];
+                NCB::FillRank2(0.0, approxDimension, leafCount, leafDeltas, ctx->LocalExecutor);
+            }
             const double initValue = GetNeutralApprox(error.GetIsExpApprox());
             NCB::FillRank2(initValue, approxDimension, bt.TailFinish, &approxDeltas, ctx->LocalExecutor);
-            NCB::FillRank2(0.0, approxDimension, leafCount, &leafDeltas, ctx->LocalExecutor);
             if (approxDimension == 1 && !isMultiRegression) {
                 CalcApproxDeltaSimple(
                     fold,
@@ -1004,7 +1008,7 @@ void CalcApproxForLeafStruct(
                     treeMonotoneConstraints,
                     ctx,
                     &approxDeltas,
-                    &leafDeltas);
+                    leafDeltas);
             } else {
                 CalcApproxDeltaMulti(
                     fold,
@@ -1014,10 +1018,13 @@ void CalcApproxForLeafStruct(
                     indices,
                     ctx,
                     &approxDeltas,
-                    &leafDeltas); // TODO(strashila): check if leafDeltas handled correctly here
+                    leafDeltas); // TODO(strashila): check if leafDeltas handled correctly here
             }
         },
         0,
         fold.BodyTailArr.ysize(),
         NPar::TLocalExecutor::WAIT_COMPLETE);
+    if (leafIndices) {
+        *leafIndices = std::move(indices);
+    }
 }

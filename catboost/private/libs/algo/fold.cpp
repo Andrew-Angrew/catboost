@@ -106,7 +106,7 @@ void TFold::InitBodyTailApprox(
             bt->TailFinish,
             startingApprox ? ExpApproxIf(storeExpApproxes, *startingApprox) : GetNeutralApprox(storeExpApproxes)));
     if (!baseline && isDropout) {
-        bt->AllTreeApprox.resize(
+        bt->ApproxBackup = TVector<TVector<double>>(
             approxDimension,
             TVector<double>(
                 bt->TailFinish,

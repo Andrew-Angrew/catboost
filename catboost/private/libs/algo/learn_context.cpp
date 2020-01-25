@@ -474,6 +474,7 @@ TLearnProgress::TLearnProgress(
         )
       )
     , ApproxDimension(approxDimension)
+    , StoreLeafValuesForEachBodyTail(foldsCreationParams.IsDropout)
     , LearnAndTestQuantizedFeaturesCheckSum(featuresCheckSum)
     , Rand(randomSeed) {
 
@@ -827,18 +828,51 @@ bool TLearnContext::GetHasWeights() const {
     return HasWeights;
 }
 
-void TLearnContext::PrepareApproxesToIteration() {
+double TLearnContext::NewTreeScale() const {
+    const double learningRate = Params.BoostingOptions->LearningRate.Get();
+    const bool isDart = Params.BoostingOptions->DropoutOptions->DropoutType.Get() == EDropoutType::Dart;
+    const double treeScale = (
+        isDart
+        ? learningRate / (static_cast<double>(TreesToDrop.size()) + learningRate)
+        : learningRate
+    );
+    return treeScale;
+}
+
+void TLearnContext::MakeTreeDropout(const NCB::TTrainingForCPUDataProviders& data) {
     const auto dropoutType = Params.BoostingOptions->DropoutOptions->DropoutType.Get();
     if (dropoutType == EDropoutType::None) {
         return;
     }
-    const auto treesToDrop = SelectTreesToDrop(
+    TreesToDrop = SelectTreesToDrop(
         Params.BoostingOptions->DropoutOptions->TreeDropProbability.Get(),
         static_cast<int>(LearnProgress->TreeStruct.size()),
         dropoutType,
         &LearnProgress->Rand
     );
-
+    
+    const double learningRate = Params.BoostingOptions->LearningRate.Get();
+    const auto error = BuildError(Params, ObjectiveDescriptor);
+    const bool isExpApprox = error->GetIsExpApprox();
+    const ui32 learnFoldCount = LearnProgress->Folds.size();
+    NPar::ParallelFor(
+        *LocalExecutor,
+        0,
+        learnFoldCount + 1,
+        [&] (ui32 foldId) {
+            TFold* fold = (foldId == learnFoldCount ? &LearnProgress->AveragingFold : &LearnProgress->Folds[foldId]);
+            DropTreesForSptitSearch(
+                data,
+                LearnProgress->TreeStruct,
+                TreesToDrop,
+                isExpApprox,
+                dropoutType == EDropoutType::Dart,
+                learningRate,
+                fold,
+                LocalExecutor
+            );
+        }
+    );
 }
 
 bool NeedToUseTreeLevelCaching(

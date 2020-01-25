@@ -58,11 +58,11 @@ public:
         TVector<float> PairwiseWeights;  // [dim][]
         TVector<float> SamplePairwiseWeights;  // [dim][]
         TVector<TVector<TVector<double>>> LeafValues;  // [iteration][dim][leafIndex], may be empty
-        /* Total approx of all trees. Used when tree dropout is enabled. In that case .Approx holds
-         * approxes for some subsample of trees.
-         * Empty if dropout is not used. Always not exponentiated.
+        /* Hold "intact" approxes if some modifications are applied to usual Approx.
+         * If tree dropout is enabled holds not exponentiated approxes for all trees (while Approx holds
+         * possibly exponentiated approxes for some subsample of trees).
          */
-        TVector<TVector<double>> AllTreeApprox; // [dim][]
+        TMaybe<TVector<TVector<double>>> ApproxBackup; // [dim][], may be empty
 
         const int BodyQueryFinish;
         const int TailQueryFinish;

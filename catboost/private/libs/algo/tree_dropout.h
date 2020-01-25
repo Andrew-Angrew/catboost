@@ -1,6 +1,8 @@
 
 #include "fold.h"
 
+#include "split.h"
+
 #include <catboost/private/libs/options/enums.h>
 
 #include <catboost/libs/helpers/restorable_rng.h>
@@ -12,12 +14,14 @@ TVector<int> SelectTreesToDrop(
     TRestorableFastRng64* generator
 );
 
-/*
-void DropTrees(
+void DropTreesForSptitSearch(
+    const NCB::TTrainingForCPUDataProviders& data,
+    const TVector<TSplitTree>& treeStructures,
     const TVector<int>& treesToDrop,
-    bool isExpApprox,
-    bool dartDownWeight,
-    bool doDrop,
-    TFold::TBodyTail* bodyTail
+    const bool isExpApprox,
+    const bool doDartDownWeighting,
+    const double learningRate,
+    TFold* fold,
+    NPar::TLocalExecutor* localExecutor
 );
-*/
+

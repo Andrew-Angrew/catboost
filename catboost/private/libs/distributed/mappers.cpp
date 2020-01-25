@@ -253,15 +253,16 @@ namespace NCatboostDistributed {
             const auto leafIndices = BuildIndices(
                 avrgFold,
                 forest[treeIdx],
-                GetTrainData(trainData), /*testData*/
-                { },
+                GetTrainData(trainData),
+                /*testData*/ { },
                 &NPar::LocalExecutor());
             UpdateAvrgApprox(
                 storeExpApprox,
+                /*isDropout*/ false,
                 learnSampleCount,
                 leafIndices,
-                leafValues[treeIdx], /*testData*/
-                { },
+                leafValues[treeIdx],
+                /*testData*/ { },
                 localData.Progress.Get(),
                 &NPar::LocalExecutor());
         }
@@ -656,12 +657,14 @@ namespace NCatboostDistributed {
             UpdateBodyTailApprox</*StoreExpApprox*/true>(
                 { localData.ApproxDeltas },
                 localData.Params.BoostingOptions->LearningRate,
+                /*leafIndexes*/ Nothing(),
                 &NPar::LocalExecutor(),
                 &localData.Progress->AveragingFold);
         } else {
             UpdateBodyTailApprox</*StoreExpApprox*/false>(
                 { localData.ApproxDeltas },
                 localData.Params.BoostingOptions->LearningRate,
+                /*leafIndexes*/ Nothing(),
                 &NPar::LocalExecutor(),
                 &localData.Progress->AveragingFold);
         }

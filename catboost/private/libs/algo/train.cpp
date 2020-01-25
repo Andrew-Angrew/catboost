@@ -21,6 +21,7 @@
 #include <catboost/private/libs/algo_helpers/error_functions.h>
 #include <catboost/private/libs/distributed/master.h>
 #include <catboost/private/libs/distributed/worker.h>
+#include <catboost/private/libs/functools/forward_as_const.h>
 
 
 TErrorTracker BuildErrorTracker(
@@ -42,7 +43,10 @@ static void UpdateLearningFold(
     TLearnContext* ctx
 ) {
     TVector<TVector<TVector<double>>> approxDelta;
-    TVector<TVector<TVector<double>>> foldTreeLeafValues;
+    TVector<TVector<TVector<double>>> foldTreesLeafValues;
+    TVector<TIndexType> leafIndices;
+    const bool isDropout = ctx->Params.BoostingOptions->DropoutOptions->DropoutType.Get() != EDropoutType::None;
+    Y_ASSERT(ctx->LearnProgress->StoreLeafValuesForEachBodyTail == isDropout);
 
     CalcApproxForLeafStruct(
         data,
@@ -52,24 +56,28 @@ static void UpdateLearningFold(
         randomSeed,
         ctx,
         &approxDelta,
-        &foldTreeLeafValues
+        isDropout ? &foldTreesLeafValues : nullptr,
+        isDropout ? &leafIndices : nullptr
     );
-
-    const auto learningRate = ctx->Params.BoostingOptions->LearningRate;
-    for (int bodyTailId = 0; bodyTailId < fold->BodyTailArr.ysize(); ++bodyTailId) {
-        fold->BodyTailArr[bodyTailId].LeafValues.push_back(
-            ScaleElementwise(learningRate, foldTreeLeafValues[bodyTailId])
-        );
+    TMaybe<TConstArrayRef<TIndexType>> maybeLeafIndices = Nothing();
+    if (isDropout) {
+        maybeLeafIndices = leafIndices;
     }
-
-    if (error.GetIsExpApprox()) {
-        UpdateBodyTailApprox</*StoreExpApprox*/true>(approxDelta, learningRate, ctx->LocalExecutor, fold);
-    } else {
-        UpdateBodyTailApprox</*StoreExpApprox*/false>(approxDelta, learningRate, ctx->LocalExecutor, fold);
-    }
+    const double treeScale = ctx->NewTreeScale();
+    ForwardArgsAsIntegralConst(
+        [&] (auto isExpApprox) {
+            UpdateBodyTailApprox<isExpApprox>(
+                isDropout ? foldTreesLeafValues : approxDelta,
+                treeScale,
+                maybeLeafIndices,
+                ctx->LocalExecutor,
+                fold
+            );
+        }, error.GetIsExpApprox()
+    );
 }
 
-static void ScaleAllApproxes( // TODO(strashila): convert to TLearnProgress' method and move to PrepareApproxesToIteration
+static void ScaleAllApproxes( // TODO(strashila): convert to TLearnProgress' method
     const double approxMultiplier,
     const bool storeExpApprox,
     TLearnProgress* learnProgress,
@@ -211,7 +219,10 @@ void TrainOneIteration(const NCB::TTrainingForCPUDataProviders& data, TLearnCont
         }
     }
 
-    ctx->PrepareApproxesToIteration(); // for tree dropout
+    const bool isDropout = ctx->Params.BoostingOptions->DropoutOptions->DropoutType.Get() != EDropoutType::None;
+    if (isDropout) {
+        ctx->MakeTreeDropout(data);
+    }
 
     TSplitTree bestSplitTree;
     {
@@ -376,13 +387,14 @@ void TrainOneIteration(const NCB::TTrainingForCPUDataProviders& data, TLearnCont
             );
             NormalizeLeafValues(
                 UsesPairsForCalculation(ctx->Params.LossFunctionDescription->GetLossFunction()),
-                ctx->Params.BoostingOptions->LearningRate,
+                ctx->NewTreeScale(),
                 sumLeafWeights,
                 &treeValues
             );
 
             UpdateAvrgApprox(
                 error->GetIsExpApprox(),
+                isDropout,
                 data.Learn->GetObjectCount(),
                 indices,
                 treeValues,

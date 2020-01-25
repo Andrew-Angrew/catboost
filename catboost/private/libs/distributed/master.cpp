@@ -452,13 +452,14 @@ void MapSetApproxes(
     // update test
     const auto indices = BuildIndices(
         /*unused fold*/{ },
-        splitTree, /*learnData*/
-        { },
+        splitTree,
+        /*learnData*/ { },
         testData,
         ctx->LocalExecutor);
     UpdateAvrgApprox(
-        error.GetIsExpApprox(), /*learnSampleCount*/
-        0,
+        error.GetIsExpApprox(),
+        /*isDropout*/ false,
+        /*learnSampleCount*/ 0,
         indices,
         *averageLeafValues,
         testData,

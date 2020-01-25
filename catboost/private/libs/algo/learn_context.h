@@ -86,6 +86,7 @@ struct TLearnProgress {
     TVector<TSplitTree> TreeStruct;
     TVector<TTreeStats> TreeStats;
     TVector<TVector<TVector<double>>> LeafValues; // [numTree][dim][bucketId]
+    bool StoreLeafValuesForEachBodyTail = false;
     /* Vector of multipliers that were applied to approxes at each iteration.
      * Needed to properly scale leaf values as well at the end of training.
      */
@@ -198,7 +199,8 @@ public:
     bool TryLoadProgress(std::function<void(IInputStream*)> onSnapshotLoaded = [] (IInputStream* /*snapshot*/) {});
     bool UseTreeLevelCaching() const;
     bool GetHasWeights() const;
-    void PrepareApproxesToIteration();
+    double NewTreeScale() const;
+    void MakeTreeDropout(const NCB::TTrainingForCPUDataProviders& data);
 
 public:
     THolder<TLearnProgress> LearnProgress;
@@ -210,6 +212,7 @@ public:
     TBucketStatsCache PrevTreeLevelStats;
     TProfileInfo Profile;
     // indexes of trees selected for dropout at current iteration (used when dropout_type != None).
+    TVector<int> TreesToDrop;
     bool LearnAndTestDataPackingAreCompatible;
 
 private:

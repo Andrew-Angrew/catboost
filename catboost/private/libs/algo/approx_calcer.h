@@ -76,5 +76,6 @@ void CalcApproxForLeafStruct(
     ui64 randomSeed,
     TLearnContext* ctx,
     TVector<TVector<TVector<double>>>* approxesDelta, // [bodyTailId][approxDim][docIdxInPermuted]
-    TVector<TVector<TVector<double>>>* allFoldLeafDeltas // [bodyTailId][approxDim][leafIndex]
+    TVector<TVector<TVector<double>>>* allFoldLeafDeltas, // [bodyTailId][approxDim][leafIndex], may be nullptr
+    TVector<TIndexType>* leafIndices // may be nullptr
 );

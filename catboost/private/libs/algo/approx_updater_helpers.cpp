@@ -42,7 +42,7 @@ static void ApplyLeafDelta(
 void ApplyLeafDelta(
     bool storeExpApprox,
     TConstArrayRef<TIndexType> indices,
-    TConstArrayRef<ui32> learnPermutation,
+    TMaybe<TConstArrayRef<ui32>> learnPermutation,
     const TVector<TVector<double>>& treeDelta,
     TVector<TVector<double>>* approx,
     NPar::TLocalExecutor* localExecutor
@@ -51,18 +51,19 @@ void ApplyLeafDelta(
         [&] (auto storeExpApproxAsConst, auto useLearnPermutation) {
             ::ApplyLeafDelta<storeExpApproxAsConst, useLearnPermutation>(
                 indices,
-                learnPermutation,
+                *learnPermutation,
                 treeDelta,
                 approx,
                 localExecutor
             );
         },
-        storeExpApprox, !learnPermutation.empty()
+        storeExpApprox, learnPermutation.Defined()
     );
 }
 
 void UpdateAvrgApprox(
     bool storeExpApprox,
+    bool isDropout,
     ui32 learnSampleCount,
     const TVector<TIndexType>& indices,
     const TVector<TVector<double>>& treeDelta,
@@ -80,14 +81,19 @@ void UpdateAvrgApprox(
                     return;
                 }
                 TFold::TBodyTail& bt = learnProgress->AveragingFold.BodyTailArr[0];
+                auto* approx = &bt.Approx;
+                if (isDropout) {
+                    Y_ASSERT(bt.ApproxBackup.Defined());
+                    approx = bt.ApproxBackup.Get();
+                }
                 Y_ASSERT(bt.Approx[0].ysize() == bt.TailFinish);
                 TConstArrayRef<TIndexType> indicesRef(indices);
                 ApplyLeafDelta(
-                    storeExpApprox,
-                    indicesRef, 
-                    /* learnPermutation */ {},
+                    storeExpApprox && !isDropout,
+                    indicesRef,
+                    /* learnPermutation */ Nothing(),
                     treeDelta,
-                    &bt.Approx,
+                    approx,
                     localExecutor
                 );
 

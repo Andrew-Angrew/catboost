@@ -194,7 +194,8 @@ inline void AddElementwise<double>(TConstArrayRef<double> value, TVector<double>
 
 template <typename TElementType>
 inline TVector<TElementType> ScaleElementwise(double scale, const TVector<TElementType>& value) {
-    TVector<TElementType> scaledValue(value);
+    TVector<TElementType> scaledValue;
+    scaledValue.yresize(value.size());
     for (int idx : xrange(value.size())) {
         scaledValue[idx] = ScaleElementwise(scale, value[idx]);
     }
@@ -203,7 +204,8 @@ inline TVector<TElementType> ScaleElementwise(double scale, const TVector<TEleme
 
 template <>
 inline TVector<double> ScaleElementwise<double>(double scale, const TVector<double>& value) {
-    TVector<double> scaledValue(value);
+    TVector<double> scaledValue;
+    scaledValue.yresize(value.size());
     for (int idx : xrange(value.size())) {
         scaledValue[idx] = value[idx] * scale;
     }
