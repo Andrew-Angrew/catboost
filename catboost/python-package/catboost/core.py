@@ -3689,7 +3689,10 @@ class CatBoostClassifier(CatBoost):
         boost_from_average=None,
         text_features=None,
         dictionaries=None,
-        text_processing=None
+        text_processing=None,
+	dropout_type=None,
+	p_drop=None,
+	drop_trees_for_split_search_only=None
     ):
         params = {}
         not_params = ["not_params", "self", "params", "__class__"]
@@ -4137,7 +4140,10 @@ class CatBoostRegressor(CatBoost):
         ctr_history_unit=None,
         monotone_constraints=None,
         model_shrink_rate=None,
-        boost_from_average=None
+        boost_from_average=None,
+	dropout_type=None,
+	p_drop=None,
+	drop_trees_for_split_search_only=None
     ):
         params = {}
         not_params = ["not_params", "self", "params", "__class__"]
